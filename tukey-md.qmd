@@ -1,0 +1,315 @@
+---
+title: "Tukey mean-difference plot"
+author: "Guillaume Rousselet"
+format: html
+editor: visual
+---
+
+# Dependencies
+
+```{r}
+library(tibble)
+library(ggplot2)
+library(cowplot)
+library(copula)
+source("./theme_gar.txt")
+source("./misc.R")
+```
+
+# Make plots
+```{r}
+ba.t.plot <- function(X,Y){
+  
+  # Bland-Altman:
+  BAp.x <- (X + Y) / 2 # average
+  BAp.y <- X - Y # difference
+  
+  df <- tibble(x = BAp.x, y = BAp.y)
+  
+  pA <- ggplot(df, aes(x = x, y = y)) + theme_gar +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    geom_hline(yintercept = mean(BAp.y), linetype = "solid") +
+    geom_point(alpha = 0.4, size = 1) +
+    geom_smooth(se = FALSE, color = "black", linewidth = 1) +
+    coord_cartesian(expand=FALSE) +
+    labs(title = "Bland-Altman", x = "Mean: (X+Y)/2", y = "Difference: X-Y")
+  
+  res <- ggplot_build(pA)$layout$panel_scales_y[[1]]$range$range
+  
+  # Tukey:
+  Xq <- sort(X)
+  Yq <- sort(Y)
+  Tmd.x <- (Xq + Yq) / 2 # quantile average
+  Tmd.y <- Xq - Yq # quantile difference
+  
+  df <- tibble(x = Tmd.x, y = Tmd.y)
+  
+  pB <- ggplot(df, aes(x = x, y = y)) + theme_gar +
+    geom_hline(yintercept = 0, linetype = "dashed") +
+    geom_point(alpha = 0.4, size = 1) +
+    coord_cartesian(ylim = res, expand=FALSE) +
+    labs(title = "Tukey", x = "Mean: (X+Y)/2", y = "Difference: X-Y")
+  
+  p <- plot_grid(pA, pB, nrow = 1, labels = c("A", "B"), label_size = 20)
+  p
+}
+```
+
+Distributions can differ in many ways, not just in central tendency ([Rousselet, Pernet & Wilcox, 2017](https://onlinelibrary.wiley.com/doi/full/10.1111/ejn.13610)). While obvious, this statement is at odd with common statistical practices that are focused exclusively on mean comparisons. Fortunately, there are many methods to make distributional inferences, for instance by applying generalized linear models to reaction time data ([Lindeløv, 2019](https://lindeloev.github.io/shiny-rt/)). Another informative approach is to make inferences about multiple quantiles, essentially an extension of q-q plots (quantile-quantile plots, [Wilk & Gnanadesikan, 1968](https://doi.org/10.1093/biomet/55.1.1)). Quantile inference methods appear to be have been reinvented multiple times ([Rousselet, 2018](https://garstats.wordpress.com/2018/09/05/qplot/)). In this earlier post, I illustrated four very similar types of plots: quantile plots, vincentile plots, delta plots and shift functions. As far as I know, the earliest method is the shift function, introduced by Doksum ([1974](https://www.jstor.org/stable/2958036); [1976](https://www.jstor.org/stable/2335720)). Recently, while reading about Bland-Altman plots ([Altman & Bland, 1983](https://www.jstor.org/stable/2987937)), I came across a 5th type of quantile plots, the Tukey mean-difference plot ([Cleveland, 1993](https://archive.org/details/visualizingdata00will)). 
+
+**Side story**: it is unclear who the Tukey in question is, as Cleveland (1993) offers no reference for the plot. A very similar plot appears in an earlier book by Chambers, Cleveland, Kleiner & Tukey, [1983](https://www.taylorfrancis.com/books/mono/10.1201/9781351072304/graphical-methods-data-analysis-chambers). The Tukey is the 1983 book is Paul A. Tukey, not the famous John W. Tukey. [Others](https://stats.stackexchange.com/questions/665116/help-with-origins-of-term-tukey-mean-difference-plot) have been down the same historical rabbit hole.  
+
+Surprisingly, several sources describe the Bland-Altman plot and the Tukey mean-difference plot as equivalent ([Wikipedia](https://en.wikipedia.org/wiki/Bland–Altman_plot); [Wolfram](https://mathworld.wolfram.com/TukeyMean-DifferencePlot.html)). Equating the two methods is surprising because, even though they lead to graphs that can look similar, they ask very different questions about the data. The Bland-Altman plot is a kind of scatterplot used to assess the agreement between two methods (and more generally two paired measurements): the differences between paired observations are plotted as a function of their averages. In contrast, the Tukey mean-difference plot is a type of q-q plot used to assess distributional shape differences: the quantile differences are plotted as a function of the quantile averages. The general difference between a scatterplot and a q-q plot is vividly described in this quote from [Chambers, Cleveland, Kleiner & Tukey, 1983](https://www.taylorfrancis.com/books/mono/10.1201/9781351072304/graphical-methods-data-analysis-chambers):
+
+"It is essential to understand the difference between a quantile-quantile plot and a scatter plot. Basically, a scatter plot is useful for studying such questions as "Is the monthly average temperature in Lincoln systematically related to the temperature in Newark?" or "If Newark has a hot month, is Lincoln likely to have hot weather in the same month?" On the other hand, the quantile-quantile plot is aimed at such questions as "Over a period of time, do the residents of Lincoln experience the same mixture of hot, mild, and cold weather as people living in Newark?" This question would be meaningful even if the two data sets spanned different years, or if we were comparing autumn temperatures in Newark with spring temperatures in Lincoln, or if Newark were in another galaxy. It is the kind of question that a home owner in Lincoln and one in Newark might be interested in if they were concerned about the cost of heating in the winter and air conditioning in the summer at the two places but had no interest in whether they experienced hot and cold spells at exactly the same time."
+
+In short, a scatterplot is about the relation between paired observations, whereas a q-q plot is about relative shape differences between two distributions of observations. A scatterplot can only be used when dealing with paired observations; it is irrelevant for a q-q plot. 
+
+To better understand the two types of graphs, let's consider a series of illustrations. The next four series of plots reflect situations where the Bland-Altman plot is a useful tool: we try to estimate some ground truth using two types of instruments, and then consider how well the two sets of measurements agree. 
+
+# Dependent observations
+
+## Independent measurement errors, no bias
+
+In this first example, we get two sets of n=200 measurements that are equal to a ground truth + random errors that are independent between the sets. Also, there is no bias. In this situation, the two measurement methods agree with each other. Any pattern is due to sampling variability. Increase the sample size in the code to see what happens.
+
+```{r, message=FALSE}
+set.seed(21)
+n <- 200 # sample size
+GT <- rbeta(n, 5, 5) # ground truth
+# independent error terms
+sigma.error <- 0.1
+e1 <- rnorm(n, mean=0, sd=sigma.error)
+e2 <- rnorm(n, mean=0, sd=sigma.error)
+X <- GT + e1 
+Y <- GT + e2 
+p <- ba.t.plot(X,Y)
+p
+```
+
+For the Bland-Altman plot, a superimposed smoother is useful to reveal trends in the scatterplot. 
+In this example and the following one, the two plots reveal similar trends in differences. We can also see a difference in scale: the Bland-Altman plot shows the raw differences between pairs of observations, whereas the Tukey mean-difference plot shows differences between matching quantiles, or order statistics. In the case of equal sample sizes, these quantiles are simply the sorted observations, such that the smallest observation in one group is compared to the smallest observation in the other group, and so on in rank order.
+
+## Correlated measurement errors, no bias
+
+In this situation, the error terms have a 0.5 correlation.
+
+```{r, message=FALSE}
+rho <- 0.5 # correlation between error terms
+e2 <- rho * e1 + sqrt(1 - rho^2) * e2 # introduce correlation
+Y <- GT + e2
+# cor(e1,e2)
+p <- ba.t.plot(X,Y)
+p
+```
+
+## Additive bias
+
+Now in addition to the correlated noise, there is a 0.1 additive bias applied to Y.
+
+```{r, message=FALSE}
+a <- 0.1 # additive bias  
+X <- GT + e1
+Y <- GT + e2 + a
+p <- ba.t.plot(X,Y)
+p
+```
+
+
+## Additive and multiplicative bias
+
+Same as above, now with the addition of multiplicative bias.
+
+```{r, message=FALSE}
+a <- 0.1 # additive bias  
+b <- 2 # multiplicative bias
+Y <- GT*b + e2 + a
+p <- ba.t.plot(X,Y)
+p
+```
+
+# Independent observations 
+
+Now we consider completely independent observations to illustrate that the Tukey mean-difference plot captures shape differences, like other related quantile methods. In this scenario, the Bland-Altman plot makes no sense.
+
+## Illustrate populations
+
+Consider pairs of marginal Beta distributions. In each panel, the reference condition is X = Beta(10,10), which is compared to Y = Beta(10,10); Y = Beta(3,3); Y = Beta(8,6); Y = Beta(4,2). Why Beta distributions? That's the way percent correct data are distributed across participants for instance ([Rousselet, 2025](https://www.eneuro.org/content/12/10/ENEURO.0339-25.2025)). 
+
+```{r, fig.height=7}
+# Reference distribution = Beta(7,7)
+shape1.x <- 10
+shape2.x <- 10    
+# Second distribution:
+shape1.y <- c(10,3,8,4)
+shape2.y <- c(10,3,6,2)   
+nc <- length(shape1.y)
+
+x <- seq(0, 1, length.out = 1000)
+dX <- dbeta(x, shape1 = shape1.x, shape2 = shape2.x)
+dY <- matrix(0, nrow = 1000, ncol = nc)
+for(S in 1:nc){
+  dY[,S] <- dbeta(x, shape1 = shape1.y[S], shape2 = shape2.y[S])  
+}
+
+# Plt densities for both distributions
+df <- tibble(x = rep(x, nc*2),
+             y = c(rep(dX,nc),as.vector(dY)),
+             Shape = rep(c("X","Y"), each = 1000*nc),
+             Cont = rep(rep(c("Identical", "Spread", "Small shift", "Large shift"),each=1000),2)
+)
+# Distribution = rep(c(paste0("Beta(",shape1.x,",",shape2.x,")"), paste0("Beta(",shape1.y,",",shape2.y,")")), each = 1000))
+
+df$Cont <-  keeporder(df$Cont) 
+
+ggplot(df, aes(x = x, y = y, colour = Shape)) + theme_gar +
+  geom_line(linewidth = 1.2) +
+  labs(title = "Density Functions",
+       x = "Observations", y = "Density", colour = "Distribution") +
+  scale_colour_manual(values = c("#000000", "#E69F00")) +
+  theme(axis.ticks.y = element_blank(),
+        axis.text.y = element_blank(),
+        legend.position = "bottom") +
+  facet_wrap(vars(Cont))
+```
+
+# Simulate data: vary shape
+
+Now imagine we take independent samples from these populations. In that situation the Bland-Altman plot is inappropriate, because any pairing of observations would be completely arbitrary. To make it more interesting, we can also use different sample sizes: n1=100 and n2=200.
+
+```{r}
+set.seed(666)
+
+n1 <- 100 # sample sizes
+n2 <- 200
+n <- min(n1,n2)
+probs <- seq(0, 1, length.out=n)
+
+Tmd.x <- matrix(0, nrow = n, ncol = nc)
+Tmd.y <- matrix(0, nrow = n, ncol = nc)
+
+# generate X once for direct comparison
+X  <- rbeta(n1, shape1.x, shape2.x)
+Xq <- quantile(X, probs = probs, type = 8)
+
+for(S in 1:nc){
+  Y  <- rbeta(n2, shape1.y[S], shape2.y[S])
+  # plot(density(X)); lines(density(Y))
+  # Tukey:
+  Yq <- quantile(Y, probs = probs, type = 8)
+  Tmd.x[,S] <- (Xq + Yq) / 2 # quantile average
+  Tmd.y[,S] <- Xq - Yq # quantile difference
+}  
+```
+
+## Summary figure
+
+```{r}
+df <- tibble(x = as.vector(Tmd.x),
+             y = as.vector(Tmd.y),
+             Cont = factor(rep(c("Identical", "Spread", "Small shift", "Large shift"),each=n))
+)
+
+df$Cont <- keeporder(df$Cont)
+
+ggplot(df, aes(x = x, y = y)) + theme_gar +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_point(alpha = 0.4, size = 1) +
+  facet_wrap(vars(Cont), nrow = 2, scales = "fixed") +
+  coord_cartesian(expand=TRUE) +
+  labs(x = "Mean: (X+Y)/2", y = "Difference: X-Y")
+```
+
+## Downsample to the deciles
+
+Since we're plotting quantiles, we don't need to plot so many. We can make the same graphs using the deciles only. 
+
+```{r}
+set.seed(666)
+
+n1 <- 100 # sample sizes
+n2 <- 200
+probs <- seq(0.1, 0.9, 0.1)
+n <- length(probs)
+
+Tmd.x <- matrix(0, nrow = n, ncol = nc)
+Tmd.y <- matrix(0, nrow = n, ncol = nc)
+
+# generate X once for direct comparison
+X  <- rbeta(n1, shape1.x, shape2.x)
+Xq <- quantile(X, probs = probs, type = 8)
+
+for(S in 1:nc){
+  Y  <- rbeta(n2, shape1.y[S], shape2.y[S])
+  # plot(density(X)); lines(density(Y))
+  # Tukey:
+  Yq <- quantile(Y, probs = probs, type = 8)
+  Tmd.x[,S] <- (Xq + Yq) / 2 # quantile average
+  Tmd.y[,S] <- Xq - Yq # quantile difference
+}  
+
+df <- tibble(x = as.vector(Tmd.x),
+             y = as.vector(Tmd.y),
+             Cont = factor(rep(c("Identical", "Spread", "Small shift", "Large shift"),each=n))
+)
+
+df$Cont <- keeporder(df$Cont)
+
+ggplot(df, aes(x = x, y = y)) + theme_gar +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_line() +
+  geom_point(size = 2) +
+  facet_wrap(vars(Cont), nrow = 2, scales = "fixed") +
+  coord_cartesian(expand=TRUE) +
+  labs(x = "Mean: (X+Y)/2", y = "Difference: X-Y")
+```
+
+## Downsample to the quartiles
+
+Or even just the quartiles!
+
+```{r}
+set.seed(666)
+
+n1 <- 100 # sample sizes
+n2 <- 200
+probs <- c(0.25, 0.5, 0.75)
+n <- length(probs)
+
+Tmd.x <- matrix(0, nrow = n, ncol = nc)
+Tmd.y <- matrix(0, nrow = n, ncol = nc)
+
+# generate X once for direct comparison
+X  <- rbeta(n1, shape1.x, shape2.x)
+Xq <- quantile(X, probs = probs, type = 8)
+
+for(S in 1:nc){
+  Y  <- rbeta(n2, shape1.y[S], shape2.y[S])
+  # plot(density(X)); lines(density(Y))
+  # Tukey:
+  Yq <- quantile(Y, probs = probs, type = 8)
+  Tmd.x[,S] <- (Xq + Yq) / 2 # quantile average
+  Tmd.y[,S] <- Xq - Yq # quantile difference
+}  
+
+df <- tibble(x = as.vector(Tmd.x),
+             y = as.vector(Tmd.y),
+             Cont = factor(rep(c("Identical", "Spread", "Small shift", "Large shift"),each=n))
+)
+
+df$Cont <- keeporder(df$Cont)
+
+ggplot(df, aes(x = x, y = y)) + theme_gar +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_line() +
+  geom_point(size = 2) +
+  facet_wrap(vars(Cont), nrow = 2, scales = "fixed") +
+  coord_cartesian(expand=TRUE) +
+  labs(x = "Mean: (X+Y)/2", y = "Difference: X-Y")
+```
+
+And to get confidence intervals in these plots, the percentile bootstrap would work very well, especially when combined with the Harrell-Davis quantile estimator ([Rousselet, Pernet & Wilcox, 2017](https://onlinelibrary.wiley.com/doi/full/10.1111/ejn.13610); [Wilcox & Rousselet, 2024](https://meth.psychopen.eu/index.php/meth/article/view/12271)). 
+
+In conclusion, the Tukey mean-difference plot is another great example of a quantile graphical method, and although in some situations it can reveal similar trends as the Bland-Altman plot, the two approaches are certainly not the same.
+
+
